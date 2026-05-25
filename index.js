@@ -1,13 +1,13 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const {
     joinVoiceChannel,
     createAudioPlayer,
     createAudioResource,
     AudioPlayerStatus,
-    getVoiceConnection
-} = require('@discordjs/voice');
+    NoSubscriberBehavior
+} = require("@discordjs/voice");
 
-const play = require('play-dl');
+const play = require("play-dl");
 
 const client = new Client({
     intents: [
@@ -16,78 +16,101 @@ const client = new Client({
     ]
 });
 
-const player = createAudioPlayer();
+// Player
+const player = createAudioPlayer({
+    behaviors: {
+        noSubscriber: NoSubscriberBehavior.Pause
+    }
+});
 
-client.once('ready', () => {
+let connection = null;
+
+// READY
+client.once("ready", () => {
     console.log(`✅ Bot online als ${client.user.tag}`);
 });
 
-client.on('interactionCreate', async interaction => {
+// SLASH COMMANDS
+client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // 🎵 PLAY
-    if (interaction.commandName === 'play') {
-        await interaction.deferReply(); // 🔥 wichtig gegen "Anwendung reagiert nicht"
+    // ======================
+    // PLAY
+    // ======================
+    if (interaction.commandName === "play") {
+        const url = interaction.options.getString("url");
 
-        const url = interaction.options.getString('url');
-
-        const voiceChannel = interaction.member.voice.channel;
-        if (!voiceChannel) {
-            return interaction.editReply('❌ Du musst in einem Voice Channel sein!');
+        if (!url) {
+            return interaction.reply("❌ Keine URL angegeben!");
         }
 
+        await interaction.deferReply();
+
         try {
-            const connection = joinVoiceChannel({
+            const voiceChannel = interaction.member.voice.channel;
+            if (!voiceChannel) {
+                return interaction.editReply("❌ Du bist in keinem Voice Channel!");
+            }
+
+            // Join Voice
+            connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator
             });
 
-            const stream = await play.stream(url);
+            // Stream
+            const streamData = await play.stream(url);
 
-            const resource = createAudioResource(stream.stream, {
-                inputType: stream.type
-            });
+            const resource = createAudioResource(streamData.stream);
 
             player.play(resource);
             connection.subscribe(player);
 
             await interaction.editReply(`🎧 Spiele jetzt: ${url}`);
+
         } catch (err) {
             console.error(err);
-            await interaction.editReply('❌ Fehler beim Abspielen!');
+            await interaction.editReply("❌ Fehler beim Abspielen!");
         }
     }
 
-    // ⏭ SKIP
-    if (interaction.commandName === 'skip') {
+    // ======================
+    // SKIP
+    // ======================
+    if (interaction.commandName === "skip") {
         await interaction.deferReply();
 
         try {
             player.stop();
-            await interaction.editReply('⏭ Song übersprungen!');
+            await interaction.editReply("⏭ Song übersprungen!");
         } catch (err) {
             console.error(err);
-            await interaction.editReply('❌ Fehler beim Skip!');
+            await interaction.editReply("❌ Fehler beim Skip!");
         }
     }
 
-    // ⏹ STOP
-    if (interaction.commandName === 'stop') {
+    // ======================
+    // STOP
+    // ======================
+    if (interaction.commandName === "stop") {
         await interaction.deferReply();
 
         try {
             player.stop();
 
-            const connection = getVoiceConnection(interaction.guild.id);
-            if (connection) connection.destroy();
+            if (connection) {
+                connection.destroy();
+                connection = null;
+            }
 
-            await interaction.editReply('⏹ Musik gestoppt und Voice verlassen!');
+            await interaction.editReply("⏹ Musik gestoppt!");
         } catch (err) {
             console.error(err);
-            await interaction.editReply('❌ Fehler beim Stop!');
+            await interaction.editReply("❌ Fehler beim Stop!");
         }
     }
 });
 
+// LOGIN (WICHTIG: ENV VAR)
 client.login(process.env.TOKEN);
