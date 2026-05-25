@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection } = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 const {
     joinVoiceChannel,
     createAudioPlayer,
@@ -16,7 +16,6 @@ const client = new Client({
     ]
 });
 
-// Player
 const player = createAudioPlayer({
     behaviors: {
         noSubscriber: NoSubscriberBehavior.Pause
@@ -25,24 +24,20 @@ const player = createAudioPlayer({
 
 let connection = null;
 
-// READY
+// BOT READY
 client.once("ready", () => {
     console.log(`✅ Bot online als ${client.user.tag}`);
 });
 
-// SLASH COMMANDS
+// INTERACTIONS
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // ======================
-    // PLAY
-    // ======================
+    // =========================
+    // PLAY COMMAND
+    // =========================
     if (interaction.commandName === "play") {
-        const url = interaction.options.getString("url");
-
-        if (!url) {
-            return interaction.reply("❌ Keine URL angegeben!");
-        }
+        let url = interaction.options.getString("url");
 
         await interaction.deferReply();
 
@@ -52,22 +47,38 @@ client.on("interactionCreate", async (interaction) => {
                 return interaction.editReply("❌ Du bist in keinem Voice Channel!");
             }
 
-            // Join Voice
+            // Join voice
             connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator
             });
 
-            // Stream
-            const streamData = await play.stream(url);
+            // =========================
+            // Spotify Support
+            // =========================
+            if (url.includes("spotify.com")) {
+                const info = await play.spotify(url);
+                url = `${info.name} ${info.artists[0].name}`;
+            }
+
+            // =========================
+            // YouTube Search
+            // =========================
+            const search = await play.search(url, { limit: 1 });
+
+            if (!search.length) {
+                return interaction.editReply("❌ Kein Song gefunden!");
+            }
+
+            const streamData = await play.stream(search[0].url);
 
             const resource = createAudioResource(streamData.stream);
 
             player.play(resource);
             connection.subscribe(player);
 
-            await interaction.editReply(`🎧 Spiele jetzt: ${url}`);
+            await interaction.editReply(`🎧 Spiele jetzt: **${search[0].title}**`);
 
         } catch (err) {
             console.error(err);
@@ -75,9 +86,9 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // ======================
-    // SKIP
-    // ======================
+    // =========================
+    // SKIP COMMAND
+    // =========================
     if (interaction.commandName === "skip") {
         await interaction.deferReply();
 
@@ -90,9 +101,9 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // ======================
-    // STOP
-    // ======================
+    // =========================
+    // STOP COMMAND
+    // =========================
     if (interaction.commandName === "stop") {
         await interaction.deferReply();
 
@@ -112,5 +123,5 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
-// LOGIN (WICHTIG: ENV VAR)
-client.login(process.env.TOKEN); 
+// LOGIN (WICHTIG!)
+client.login(process.env.TOKEN);
