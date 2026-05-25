@@ -24,19 +24,22 @@ const player = createAudioPlayer({
 
 let connection = null;
 
+// =========================
+// READY
+// =========================
 client.once("ready", () => {
     console.log(`✅ Bot online als ${client.user.tag}`);
 });
 
-// =====================
-// SLASH COMMANDS
-// =====================
+// =========================
+// INTERACTIONS
+// =========================
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // =====================
+    // =========================
     // PLAY
-    // =====================
+    // =========================
     if (interaction.commandName === "play") {
         let query = interaction.options.getString("url");
 
@@ -49,39 +52,50 @@ client.on("interactionCreate", async (interaction) => {
                 return interaction.editReply("❌ Du bist in keinem Voice Channel!");
             }
 
-            // Join Voice
             connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator
             });
 
-            // =====================
-            // Spotify FIX (nur Text nutzen)
-            // =====================
-            if (query.includes("spotify.com")) {
+            let video = null;
+
+            // =========================
+            // YouTube Link
+            // =========================
+            if (query.includes("youtu")) {
+                video = await play.video_info(query);
+                video = video.video_details;
+            }
+
+            // =========================
+            // Spotify → Text
+            // =========================
+            else if (query.includes("spotify.com")) {
                 try {
-                    const info = await play.spotify(query);
-                    query = `${info.name} ${info.artists?.[0]?.name || ""}`;
+                    const sp = await play.spotify(query);
+                    query = `${sp.name} ${sp.artists?.[0]?.name || ""}`;
                 } catch {
-                    return interaction.editReply("❌ Spotify konnte nicht verarbeitet werden!");
+                    return interaction.editReply("❌ Spotify konnte nicht gelesen werden!");
                 }
             }
 
-            // =====================
-            // YOUTUBE SEARCH (STABIL)
-            // =====================
-            const search = await play.search(query, {
-                limit: 1,
-                source: { youtube: "video" }
-            });
+            // =========================
+            // YouTube Search
+            // =========================
+            if (!video) {
+                const search = await play.search(query, { limit: 1 });
 
-            if (!search || search.length === 0) {
-                return interaction.editReply("❌ Kein Song gefunden!");
+                if (!search || search.length === 0) {
+                    return interaction.editReply("❌ Kein Song gefunden!");
+                }
+
+                video = search[0];
             }
 
-            const video = search[0];
-
+            // =========================
+            // STREAM
+            // =========================
             const streamData = await play.stream(video.url);
 
             const resource = createAudioResource(streamData.stream);
@@ -89,7 +103,7 @@ client.on("interactionCreate", async (interaction) => {
             player.play(resource);
             connection.subscribe(player);
 
-            await interaction.editReply(`🎧 Spiele jetzt: **${video.title}**`);
+            await interaction.editReply(`🎧 Jetzt spielt: **${video.title}**`);
 
         } catch (err) {
             console.error(err);
@@ -97,24 +111,23 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // =====================
+    // =========================
     // SKIP
-    // =====================
+    // =========================
     if (interaction.commandName === "skip") {
         await interaction.deferReply();
 
         try {
             player.stop();
-            await interaction.editReply("⏭ Song übersprungen!");
-        } catch (err) {
-            console.error(err);
+            await interaction.editReply("⏭ Übersprungen!");
+        } catch {
             await interaction.editReply("❌ Fehler beim Skip!");
         }
     }
 
-    // =====================
+    // =========================
     // STOP
-    // =====================
+    // =========================
     if (interaction.commandName === "stop") {
         await interaction.deferReply();
 
@@ -126,15 +139,14 @@ client.on("interactionCreate", async (interaction) => {
                 connection = null;
             }
 
-            await interaction.editReply("⏹ Musik gestoppt!");
-        } catch (err) {
-            console.error(err);
+            await interaction.editReply("⏹ Gestoppt!");
+        } catch {
             await interaction.editReply("❌ Fehler beim Stop!");
         }
     }
 });
 
-// =====================
+// =========================
 // LOGIN
-// =====================
+// =========================
 client.login(process.env.TOKEN);
