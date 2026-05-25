@@ -3,7 +3,6 @@ const {
     joinVoiceChannel,
     createAudioPlayer,
     createAudioResource,
-    AudioPlayerStatus,
     NoSubscriberBehavior
 } = require("@discordjs/voice");
 
@@ -24,30 +23,24 @@ const player = createAudioPlayer({
 
 let connection = null;
 
-// =========================
-// READY
-// =========================
+// ===================== READY =====================
 client.once("ready", () => {
     console.log(`✅ Bot online als ${client.user.tag}`);
 });
 
-// =========================
-// INTERACTIONS
-// =========================
+// ===================== INTERACTIONS =====================
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // =========================
-    // PLAY
-    // =========================
+    // ===================== PLAY =====================
     if (interaction.commandName === "play") {
-        let query = interaction.options.getString("url");
 
-        await interaction.deferReply();
+        await interaction.deferReply(); // wichtig gegen Timeout
 
         try {
-            const voiceChannel = interaction.member.voice.channel;
+            let query = interaction.options.getString("url");
 
+            const voiceChannel = interaction.member.voice.channel;
             if (!voiceChannel) {
                 return interaction.editReply("❌ Du bist in keinem Voice Channel!");
             }
@@ -60,29 +53,27 @@ client.on("interactionCreate", async (interaction) => {
 
             let video = null;
 
-            // =========================
-            // YouTube Link
-            // =========================
+            // =====================
+            // YouTube Link direkt
+            // =====================
             if (query.includes("youtu")) {
-                video = await play.video_info(query);
-                video = video.video_details;
+                const info = await play.video_info(query);
+                video = info.video_details;
             }
 
-            // =========================
-            // Spotify → Text
-            // =========================
+            // =====================
+            // Spotify FIX (KEIN API CALL!)
+            // =====================
             else if (query.includes("spotify.com")) {
-                try {
-                    const sp = await play.spotify(query);
-                    query = `${sp.name} ${sp.artists?.[0]?.name || ""}`;
-                } catch {
-                    return interaction.editReply("❌ Spotify konnte nicht gelesen werden!");
-                }
+                const parts = query.split("/track/");
+                const id = parts[1]?.split("?")[0];
+
+                query = `song ${id}`;
             }
 
-            // =========================
-            // YouTube Search
-            // =========================
+            // =====================
+            // SEARCH (YouTube safe)
+            // =====================
             if (!video) {
                 const search = await play.search(query, { limit: 1 });
 
@@ -93,9 +84,9 @@ client.on("interactionCreate", async (interaction) => {
                 video = search[0];
             }
 
-            // =========================
+            // =====================
             // STREAM
-            // =========================
+            // =====================
             const streamData = await play.stream(video.url);
 
             const resource = createAudioResource(streamData.stream);
@@ -111,9 +102,7 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // =========================
-    // SKIP
-    // =========================
+    // ===================== SKIP =====================
     if (interaction.commandName === "skip") {
         await interaction.deferReply();
 
@@ -125,9 +114,7 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // =========================
-    // STOP
-    // =========================
+    // ===================== STOP =====================
     if (interaction.commandName === "stop") {
         await interaction.deferReply();
 
@@ -146,7 +133,5 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
-// =========================
-// LOGIN
-// =========================
+// ===================== LOGIN =====================
 client.login(process.env.TOKEN);
