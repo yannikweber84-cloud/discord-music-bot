@@ -113,4 +113,4 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // LOGIN (WICHTIG: ENV VAR)
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN); 
