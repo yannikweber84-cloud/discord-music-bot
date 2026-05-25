@@ -24,61 +24,72 @@ const player = createAudioPlayer({
 
 let connection = null;
 
-// BOT READY
 client.once("ready", () => {
     console.log(`✅ Bot online als ${client.user.tag}`);
 });
 
-// INTERACTIONS
+// =====================
+// SLASH COMMANDS
+// =====================
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // =========================
-    // PLAY COMMAND
-    // =========================
+    // =====================
+    // PLAY
+    // =====================
     if (interaction.commandName === "play") {
-        let url = interaction.options.getString("url");
+        let query = interaction.options.getString("url");
 
         await interaction.deferReply();
 
         try {
             const voiceChannel = interaction.member.voice.channel;
+
             if (!voiceChannel) {
                 return interaction.editReply("❌ Du bist in keinem Voice Channel!");
             }
 
-            // Join voice
+            // Join Voice
             connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator
             });
 
-            // =========================
-            // Spotify Support
-            // =========================
-            if (url.includes("spotify.com")) {
-                const info = await play.spotify(url);
-                url = `${info.name} ${info.artists[0].name}`;
+            // =====================
+            // Spotify FIX (nur Text nutzen)
+            // =====================
+            if (query.includes("spotify.com")) {
+                try {
+                    const info = await play.spotify(query);
+                    query = `${info.name} ${info.artists?.[0]?.name || ""}`;
+                } catch {
+                    return interaction.editReply("❌ Spotify konnte nicht verarbeitet werden!");
+                }
             }
 
-            // =========================
-            // YouTube Search
-            // =========================
-            const search = await play.search(url, { limit: 1 });
+            // =====================
+            // YOUTUBE SEARCH (STABIL)
+            // =====================
+            const search = await play.search(query, {
+                limit: 1,
+                source: { youtube: "video" }
+            });
 
-            if (!search.length) {
+            if (!search || search.length === 0) {
                 return interaction.editReply("❌ Kein Song gefunden!");
             }
 
-            const streamData = await play.stream(search[0].url);
+            const video = search[0];
+
+            const streamData = await play.stream(video.url);
 
             const resource = createAudioResource(streamData.stream);
 
             player.play(resource);
             connection.subscribe(player);
 
-            await interaction.editReply(`🎧 Spiele jetzt: **${search[0].title}**`);
+            await interaction.editReply(`🎧 Spiele jetzt: **${video.title}**`);
 
         } catch (err) {
             console.error(err);
@@ -86,9 +97,9 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // =========================
-    // SKIP COMMAND
-    // =========================
+    // =====================
+    // SKIP
+    // =====================
     if (interaction.commandName === "skip") {
         await interaction.deferReply();
 
@@ -101,9 +112,9 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // =========================
-    // STOP COMMAND
-    // =========================
+    // =====================
+    // STOP
+    // =====================
     if (interaction.commandName === "stop") {
         await interaction.deferReply();
 
@@ -123,5 +134,7 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
-// LOGIN (WICHTIG!)
+// =====================
+// LOGIN
+// =====================
 client.login(process.env.TOKEN);
